@@ -1,0 +1,12 @@
+{
+  "name": "stChain",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "tsc-watch --onSuccess \" node dist/main.js\" "
+  },
+  "devDependencies": {
+    "tsc-watch": "^1.0.30"
+  }
+}
