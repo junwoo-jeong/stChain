@@ -1,14 +1,41 @@
 import * as SHA256 from 'crypto-js/sha256';
+const EC = require('elliptic').ec;
+const ec = new EC('secp256k1');
 
 class Transaction{
   public fromAddress: string;
   public toAddress: string;
   public amount: number;
+  public signature: any;
 
   constructor(fromAddress: string, toAddress: string, amount: number){
     this.fromAddress = fromAddress;
     this.toAddress = toAddress;
     this.amount = amount;
+  }
+  public calculateHash = (): string => {
+    return SHA256(this.fromAddress + this.toAddress + this. amount).toString();
+  }
+
+  public signTransaction = (signingKey): void => {
+    if(signingKey.getPublic('hex') !== this.fromAddress){
+      throw new Error('You cannot sign transacitons for other wallets');
+    }
+
+    const hashTx = this.calculateHash();
+    const sig = signingKey.sign(hashTx, 'base64');
+    this.signature = sig.toDER('hex');
+  }
+
+  public isValid = () => {
+    if(this.fromAddress === null) return true;
+
+    if(!this.signature || this.signature.length === 0) {
+      throw new Error('No signature in this transaction');
+    }
+
+    const publicKey = ec.keyFromPublic(this.fromAddress, 'hex');
+    return publicKey.verify(this.calculateHash(), this.signature);
   }
 }
 
@@ -49,6 +76,14 @@ class Block {
     console.log(`block mined : ${this.hash}, nonce : ${this.nonce}`);
     
   }
+  public hasValidTransactions = (): boolean => {
+    for(const tx of this.transactions){
+      if(!tx.isValid()){
+        return false;
+      }
+    }
+    return true;
+  }
 }
 
 class BlockChain{
@@ -73,6 +108,9 @@ class BlockChain{
   }
 
   public minePendingTransactions = (miningRewardAddress: string): void => {
+    const rewardTx = new Transaction(null, miningRewardAddress, this.miningReward);
+    this.pendingTransactions.push(rewardTx);
+    
     let block = new Block(Date.now().toString(), this.pendingTransactions);
     this.addBlock(block);
 
@@ -81,7 +119,15 @@ class BlockChain{
     ];
   }
 
-  public createTransaction = (transaction: Transaction) => {
+  public addTransaction = (transaction: Transaction) => {
+    if(!transaction.fromAddress || !transaction.toAddress) {
+      throw new Error("Transaction must include from and to address");
+    }
+
+    if(!transaction.isValid()){
+      throw new Error('Cannot add invalid transaction to chain');
+    }
+
     this.pendingTransactions.push(transaction);
   }
 
@@ -113,6 +159,9 @@ class BlockChain{
       const currentBlock = this.chain[i];
       const previousBlock = this.chain[i - 1];
 
+      if(!currentBlock.hasValidTransactions()){
+        return false;
+      }
       if(currentBlock.hash !== currentBlock.calculateHash()){
         return false;
       }
